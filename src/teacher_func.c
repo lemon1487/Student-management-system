@@ -1,514 +1,570 @@
+#include "../include/teacher_func.h"
+#include "../include/file_func.h"
 #include "../include/common.h"
 
-// 检查成绩是否合法（0-100分）
-int check_score(float score) {
-    return (score >= 0 && score <= 100);
-}
-
-// 计算学生总分和平均分
-void calc_student_score(Student* stu) {
-    if (stu == NULL) return;
-    stu->total = stu->math + stu->chinese + stu->english;
-    stu->avg = stu->total / 3;
-}
-
-// 学生成绩排序（按指定字段升序/降序）
-// field:1-数学 2-语文 3-英语 4-总分；type:0-升序 1-降序
-void sort_students(Student* stu_list, int count, int field, int type) {
-    if (stu_list == NULL || count <= 1) return;
-    for (int i = 0; i < count - 1; i++) {
-        for (int j = 0; j < count - i - 1; j++) {
-            float val1, val2;
-            switch (field) {
-            case 1: val1 = stu_list[j].math; val2 = stu_list[j + 1].math; break;
-            case 2: val1 = stu_list[j].chinese; val2 = stu_list[j + 1].chinese; break;
-            case 3: val1 = stu_list[j].english; val2 = stu_list[j + 1].english; break;
-            case 4: val1 = stu_list[j].total; val2 = stu_list[j + 1].total; break;
-            default: return;
-            }
-            // 升序/降序判断
-            if ((type == 0 && val1 > val2) || (type == 1 && val1 < val2)) {
-                Student temp = stu_list[j];
-                stu_list[j] = stu_list[j + 1];
-                stu_list[j + 1] = temp;
-            }
-        }
-    }
-}
-
-// 教师主菜单入口（核心功能导航）
-void teacher_menu(Student* stu_list, int* stu_count, User* user_list, int user_count, char* account) {
-    if (stu_list == NULL || stu_count == NULL || user_list == NULL || account == NULL) return;
+// 教师主菜单
+void teacher_menu(StudentNode* stu_head, int stu_count, UserNode* user_head, int user_count, char* account) {
     int choice;
     while (1) {
         printf("\n===== 教师功能菜单 =====\n");
-        printf("1. 增删查改学生信息\n");
-        printf("2. 查看班内成绩（翻页）\n");
-        printf("3. 导出学生信息到文件\n");
-        printf("4. 成绩分析（含排序）\n");
-        printf("5. 修改密码（需原密码）\n");
-        printf("0. 返回上一级\n");
+        printf("1. 管理学生信息\n");
+        printf("2. 分页查看班级成绩\n");
+        printf("3. 学生成绩分析\n");
+        printf("4. 修改个人密码\n");
+        printf("0. 退出登录\n");
         printf("请选择操作：");
 
-        while (scanf("%d", &choice) != 1 || choice < 0 || choice > 5) {
+        while (scanf("%d", &choice) != 1 || choice < 0 || choice > 4) {
             clear_buffer();
-            printf("输入错误！请输入0-5：");
+            printf("输入错误！请输入0-4：");
         }
         clear_buffer();
 
         switch (choice) {
-        case 1: manage_student(stu_list, stu_count); break;
-        case 2: view_class_score_page(stu_list, *stu_count); break;
-        case 3: export_student(stu_list, *stu_count); break;
-        case 4: teacher_score_analysis(stu_list, *stu_count); break;
-        case 5: teacher_change_pwd(user_list, user_count, account); break;
-        case 0: printf("返回上一级菜单...\n"); return;
+        case 1: {
+            int sub_choice;
+            while (1) {
+                printf("\n===== 学生信息管理 =====\n");
+                printf("1. 添加学生\n");
+                printf("2. 删除学生\n");
+                printf("3. 修改学生成绩\n");
+                printf("4. 查询学生成绩\n");
+                printf("5. 导出学生成绩\n");
+                printf("0. 返回\n");
+                printf("请选择：");
+                scanf("%d", &sub_choice);
+                clear_buffer();
+                switch (sub_choice) {
+                case 1: add_student(&stu_head, &stu_count); break;
+                case 2: {
+                    char id[MAX_ID_LEN] = { 0 };
+                    printf("请输入要删除的学生学号：");
+                    scanf("%11s", id);
+                    clear_buffer();
+                    del_student(&stu_head, &stu_count, id);
+                    break;
+                }
+                case 3: {
+                    char id[MAX_ID_LEN] = { 0 };
+                    printf("请输入要修改的学生学号：");
+                    scanf("%11s", id);
+                    clear_buffer();
+                    edit_student(stu_head, stu_count, id);
+                    break;
+                }
+                case 4: query_student(stu_head, stu_count); break;
+                case 5: export_student(stu_head, stu_count); break;
+                case 0: goto TEACHER_STU_MENU_EXIT;
+                default: printf("输入错误！\n");
+                }
+            }
+        TEACHER_STU_MENU_EXIT:
+            break;
+        }
+        case 2: view_class_score_page(stu_head, stu_count); break;
+        case 3: teacher_score_analysis(stu_head, stu_count); break;
+        case 4: teacher_change_pwd(user_head, user_count, account); break;
+        case 0: printf("退出教师登录...\n"); return;
         default: printf("输入错误！\n");
         }
     }
 }
 
-// 学生信息管理总入口（增删改查+排序）
-void manage_student(Student* stu_list, int* stu_count) {
-    if (stu_list == NULL || stu_count == NULL) return;
-    int choice;
-    while (1) {
-        printf("\n===== 学生信息管理 =====\n");
-        printf("1. 添加学生\n");
-        printf("2. 删除学生\n");
-        printf("3. 修改学生成绩\n");
-        printf("4. 查询学生信息\n");
-        printf("5. 成绩排序\n");
-        printf("0. 返回上一级\n");
-        printf("请选择：");
-
-        while (scanf("%d", &choice) != 1 || choice < 0 || choice > 5) {
-            clear_buffer();
-            printf("输入错误！请输入0-5：");
-        }
-        clear_buffer();
-
-        switch (choice) {
-        case 1: add_student(stu_list, stu_count); break;
-        case 2: del_student(stu_list, stu_count); break;
-        case 3: edit_student(stu_list, *stu_count); break;
-        case 4: query_student(stu_list, *stu_count); break;
-        case 5: { // 成绩排序
-            if (*stu_count == 0) {
-                printf("暂无学生数据！\n");
-                break;
-            }
-            int field, type;
-            printf("\n===== 成绩排序 =====\n");
-            printf("请选择排序字段：\n");
-            printf("1. 数学  2. 语文  3. 英语  4. 总分\n");
-            printf("输入选择：");
-            while (scanf("%d", &field) != 1 || field < 1 || field > 4) {
-                clear_buffer();
-                printf("输入错误！请输入1-4：");
-            }
-            clear_buffer();
-
-            printf("请选择排序方式：\n");
-            printf("0. 升序  1. 降序\n");
-            printf("输入选择：");
-            while (scanf("%d", &type) != 1 || type < 0 || type > 1) {
-                clear_buffer();
-                printf("输入错误！请输入0-1：");
-            }
-            clear_buffer();
-
-            sort_students(stu_list, *stu_count, field, type);
-            save_student(stu_list, *stu_count);
-            printf("排序完成！\n");
-            query_student(stu_list, *stu_count);
-            break;
-        }
-        case 0: return;
-        default: printf("输入错误！\n");
-        }
-    }
-}
-
-// 添加学生（支持姓名/班级含空格，学号查重）
-void add_student(Student* stu_list, int* stu_count) {
-    if (stu_list == NULL || stu_count == NULL || *stu_count >= 1000) {
-        printf("学生数量已达上限/参数错误！\n");
+//教师修改密码
+void teacher_change_pwd(UserNode* user_head, int user_count, char* account) {
+    if (user_head == NULL || user_count == 0) {
+        printf("暂无用户数据！\n");
         return;
     }
 
-    Student new_stu = { 0 };
-    printf("请输入学号：");
-    scanf("%11s", new_stu.id);
-    clear_buffer(); // 清空缓冲区，避免影响后续fgets
-
-    // 检查学号重复
-    for (int i = 0; i < *stu_count; i++) {
-        if (strcmp(stu_list[i].id, new_stu.id) == 0) {
-            printf("该学号已存在！\n");
-            return;
-        }
+    UserNode* p = user_head;
+    while (p != NULL && strcmp(p->data.account, account) != 0) {
+        p = p->next;
     }
-
-    // 读取姓名（支持空格）
-    printf("请输入姓名（支持空格）：");
-    fgets(new_stu.name, MAX_NAME_LEN, stdin);
-    new_stu.name[strcspn(new_stu.name, "\n")] = '\0'; // 移除换行符
-
-    // 读取班级（支持空格）
-    printf("请输入班级（支持空格）：");
-    fgets(new_stu.class, MAX_CLASS_LEN, stdin);
-    new_stu.class[strcspn(new_stu.class, "\n")] = '\0'; // 移除换行符
-
-    // 成绩输入（带合法性校验）
-    printf("请输入数学成绩：");
-    while (scanf("%f", &new_stu.math) != 1 || !check_score(new_stu.math)) {
-        clear_buffer();
-        printf("输入错误！请输入0-100的数字：");
-    }
-    printf("请输入语文成绩：");
-    while (scanf("%f", &new_stu.chinese) != 1 || !check_score(new_stu.chinese)) {
-        clear_buffer();
-        printf("输入错误！请输入0-100的数字：");
-    }
-    printf("请输入英语成绩：");
-    while (scanf("%f", &new_stu.english) != 1 || !check_score(new_stu.english)) {
-        clear_buffer();
-        printf("输入错误！请输入0-100的数字：");
-    }
-    clear_buffer();
-
-    // 计算总分/平均分
-    calc_student_score(&new_stu);
-
-    // 添加到数组并保存
-    stu_list[*stu_count] = new_stu;
-    (*stu_count)++;
-    save_student(stu_list, *stu_count);
-    printf("学生信息添加成功！\n");
-}
-
-// 删除学生（按学号查找，删除后数据前移）
-void del_student(Student* stu_list, int* stu_count) {
-    if (stu_list == NULL || stu_count == NULL || *stu_count == 0) {
-        printf("暂无学生数据/参数错误！\n");
-        return;
-    }
-
-    char del_id[MAX_ID_LEN] = { 0 };
-    printf("请输入要删除的学生学号：");
-    scanf("%11s", del_id);
-    clear_buffer();
-
-    int del_idx = -1;
-    for (int i = 0; i < *stu_count; i++) {
-        if (strcmp(stu_list[i].id, del_id) == 0) {
-            del_idx = i;
-            break;
-        }
-    }
-    if (del_idx == -1) {
-        printf("学号不存在！\n");
-        return;
-    }
-
-    // 移除学生（后续元素前移）
-    for (int i = del_idx; i < *stu_count - 1; i++) {
-        stu_list[i] = stu_list[i + 1];
-    }
-    (*stu_count)--;
-    save_student(stu_list, *stu_count);
-    printf("学生信息删除成功！\n");
-}
-
-// 修改学生成绩（按学号查找，修改后重新计算总分/平均分）
-void edit_student(Student* stu_list, int stu_count) {
-    if (stu_list == NULL || stu_count == 0) {
-        printf("暂无学生数据/参数错误！\n");
-        return;
-    }
-
-    char edit_id[MAX_ID_LEN] = { 0 };
-    printf("请输入要修改的学生学号：");
-    scanf("%11s", edit_id);
-    clear_buffer();
-
-    int edit_idx = -1;
-    for (int i = 0; i < stu_count; i++) {
-        if (strcmp(stu_list[i].id, edit_id) == 0) {
-            edit_idx = i;
-            break;
-        }
-    }
-    if (edit_idx == -1) {
-        printf("学号不存在！\n");
-        return;
-    }
-
-    // 修改成绩（带合法性校验）
-    printf("当前成绩：数学=%.1f 语文=%.1f 英语=%.1f\n",
-        stu_list[edit_idx].math, stu_list[edit_idx].chinese, stu_list[edit_idx].english);
-    printf("请输入新的数学成绩：");
-    while (scanf("%f", &stu_list[edit_idx].math) != 1 || !check_score(stu_list[edit_idx].math)) {
-        clear_buffer();
-        printf("输入错误！请输入0-100的数字：");
-    }
-    printf("请输入新的语文成绩：");
-    while (scanf("%f", &stu_list[edit_idx].chinese) != 1 || !check_score(stu_list[edit_idx].chinese)) {
-        clear_buffer();
-        printf("输入错误！请输入0-100的数字：");
-    }
-    printf("请输入新的英语成绩：");
-    while (scanf("%f", &stu_list[edit_idx].english) != 1 || !check_score(stu_list[edit_idx].english)) {
-        clear_buffer();
-        printf("输入错误！请输入0-100的数字：");
-    }
-    clear_buffer();
-
-    // 重新计算总分/平均分并保存
-    calc_student_score(&stu_list[edit_idx]);
-    save_student(stu_list, stu_count);
-    printf("成绩修改成功！\n");
-}
-
-// 查询所有学生信息（格式化展示）
-void query_student(Student* stu_list, int stu_count) {
-    if (stu_list == NULL || stu_count == 0) {
-        printf("暂无学生数据/参数错误！\n");
-        return;
-    }
-
-    printf("\n===== 学生信息列表 =====\n");
-    printf("%-15s %-20s %-20s %12s %12s %10s %10s %10s\n",
-        "学号", "姓名", "班级", "数学", "语文", "英语", "平均分", "总分");
-    printf("--------------------------------------------------------------------------------------------------------\n");
-    for (int i = 0; i < stu_count; i++) {
-        printf("%-12s %-20s %-20s %8.1f %8.1f %8.1f %8.1f %8.1f\n",
-            stu_list[i].id, stu_list[i].name, stu_list[i].class,
-            stu_list[i].math, stu_list[i].chinese, stu_list[i].english,
-            stu_list[i].avg, stu_list[i].total);
-    }
-}
-
-// 翻页查看指定班级成绩（分页展示，支持上下页切换）
-void view_class_score_page(Student* stu_list, int stu_count) {
-    if (stu_list == NULL || stu_count == 0) {
-        printf("暂无学生数据！\n");
-        return;
-    }
-
-    // 获取班级列表（去重）
-    char classes[100][MAX_CLASS_LEN] = { 0 };
-    int class_count = 0;
-    for (int i = 0; i < stu_count; i++) {
-        int exists = 0;
-        for (int j = 0; j < class_count; j++) {
-            if (strcmp(classes[j], stu_list[i].class) == 0) {
-                exists = 1;
-                break;
-            }
-        }
-        if (!exists) {
-            strcpy(classes[class_count], stu_list[i].class);
-            class_count++;
-        }
-    }
-
-    // 选择班级
-    printf("\n===== 班级列表 =====\n");
-    for (int i = 0; i < class_count; i++) {
-        printf("%d. %s\n", i + 1, classes[i]);
-    }
-    printf("请选择班级（输入序号）：");
-    int class_choice;
-    while (scanf("%d", &class_choice) != 1 || class_choice < 1 || class_choice > class_count) {
-        clear_buffer();
-        printf("输入错误！请输入1-%d：", class_count);
-    }
-    clear_buffer();
-    char* target_class = classes[class_choice - 1];
-
-    // 筛选本班学生
-    Student class_stu[1000] = { 0 };
-    int class_stu_count = 0;
-    for (int i = 0; i < stu_count; i++) {
-        if (strcmp(stu_list[i].class, target_class) == 0) {
-            class_stu[class_stu_count] = stu_list[i];
-            class_stu_count++;
-        }
-    }
-
-    // 翻页显示
-    int total_page = (class_stu_count + PAGE_SIZE - 1) / PAGE_SIZE;
-    int curr_page = 1;
-    while (1) {
-        printf("\n===== %s 班级成绩（第%d页/共%d页）=====\n", target_class, curr_page, total_page);
-        printf("%-15s %-17s %15s %8s %10s %11s %11s\n",
-            "学号", "姓名", "数学", "语文", "英语", "平均分", "总分");
-        printf("-------------------------------------------------------------------------------------------\n");
-
-        int start = (curr_page - 1) * PAGE_SIZE;
-        int end = start + PAGE_SIZE;
-        if (end > class_stu_count) end = class_stu_count;
-
-        for (int i = start; i < end; i++) {
-            printf("%-12s %-20s %8.1f %8.1f %8.1f %8.1f %8.1f\n",
-                class_stu[i].id, class_stu[i].name,
-                class_stu[i].math, class_stu[i].chinese, class_stu[i].english,
-                class_stu[i].avg, class_stu[i].total);
-        }
-
-        printf("\n操作：1-下一页 2-上一页 0-返回\n");
-        int op;
-        while (scanf("%d", &op) != 1 || op < 0 || op > 2) {
-            clear_buffer();
-            printf("输入错误！请输入0-2：");
-        }
-        clear_buffer();
-
-        if (op == 0) break;
-        else if (op == 1 && curr_page < total_page) curr_page++;
-        else if (op == 2 && curr_page > 1) curr_page--;
-    }
-}
-
-// 导出学生信息到CSV文件（覆盖式写入，解决重复定义问题）
-void export_student(Student* stu_list, int stu_count) {
-    if (stu_list == NULL || stu_count == 0) {
-        printf("暂无学生数据！\n");
-        return;
-    }
-
-    FILE* fp = fopen("./data/students_export.csv", "w");
-    if (!fp) {
-        printf("导出失败！\n");
-        return;
-    }
-
-    // 写入CSV表头
-    fprintf(fp, "学号,姓名,班级,数学,语文,英语,平均分,总分\n");
-    // 写入学生数据
-    for (int i = 0; i < stu_count; i++) {
-        fprintf(fp, "%s,%s,%s,%.1f,%.1f,%.1f,%.1f,%.1f\n",
-            stu_list[i].id, stu_list[i].name, stu_list[i].class,
-            stu_list[i].math, stu_list[i].chinese, stu_list[i].english,
-            stu_list[i].avg, stu_list[i].total);
-    }
-    fclose(fp);
-    printf("学生信息已导出到 ./data/students_export.csv\n");
-}
-
-// 教师成绩分析（统计平均分/最高分/最低分，支持总分降序排名）
-void teacher_score_analysis(Student* stu_list, int stu_count) {
-    if (stu_list == NULL || stu_count == 0) {
-        printf("暂无学生数据！\n");
-        return;
-    }
-
-    // 统计各科平均分
-    float math_sum = 0, chinese_sum = 0, english_sum = 0;
-    for (int i = 0; i < stu_count; i++) {
-        math_sum += stu_list[i].math;
-        chinese_sum += stu_list[i].chinese;
-        english_sum += stu_list[i].english;
-    }
-
-    printf("\n===== 成绩分析汇总 =====\n");
-    printf("总人数：%d\n", stu_count);
-    printf("数学平均分：%.1f\n", math_sum / stu_count);
-    printf("语文平均分：%.1f\n", chinese_sum / stu_count);
-    printf("英语平均分：%.1f\n", english_sum / stu_count);
-
-    // 统计各科最高分/最低分
-    float math_max = 0, math_min = 100;
-    float chinese_max = 0, chinese_min = 100;
-    float english_max = 0, english_min = 100;
-    for (int i = 0; i < stu_count; i++) {
-        if (stu_list[i].math > math_max) math_max = stu_list[i].math;
-        if (stu_list[i].math < math_min) math_min = stu_list[i].math;
-        if (stu_list[i].chinese > chinese_max) chinese_max = stu_list[i].chinese;
-        if (stu_list[i].chinese < chinese_min) chinese_min = stu_list[i].chinese;
-        if (stu_list[i].english > english_max) english_max = stu_list[i].english;
-        if (stu_list[i].english < english_min) english_min = stu_list[i].english;
-    }
-
-    printf("\n各科目最高分/最低分：\n");
-    printf("数学：%.1f / %.1f\n", math_max, math_min);
-    printf("语文：%.1f / %.1f\n", chinese_max, chinese_min);
-    printf("英语：%.1f / %.1f\n", english_max, english_min);
-
-    // 可选：按总分降序展示学生排名
-    printf("\n是否按总分降序显示所有学生？(1-是 0-否)：");
-    int show_sort;
-    while (scanf("%d", &show_sort) != 1 || show_sort < 0 || show_sort > 1) {
-        clear_buffer();
-        printf("输入错误！请输入0或1：");
-    }
-    clear_buffer();
-
-    if (show_sort == 1) {
-        // 临时复制数组，避免修改原数据
-        Student temp_stu[1000];
-        for (int i = 0; i < stu_count; i++) {
-            temp_stu[i] = stu_list[i];
-        }
-        sort_students(temp_stu, stu_count, 4, 1); // 总分降序排序
-        printf("\n===== 总分降序排名 =====\n");
-        printf("%-15s %-20s %-22s %12s\n", "学号", "姓名", "班级", "总分");
-        printf("-----------------------------------------------------------------------------\n");
-        for (int i = 0; i < stu_count; i++) {
-            printf("%-12s %-20s %-20s %8.1f\n",
-                temp_stu[i].id, temp_stu[i].name, temp_stu[i].class, temp_stu[i].total);
-        }
-    }
-}
-
-// 教师修改密码（验证原密码，两次确认新密码，修改后保存）
-void teacher_change_pwd(User* user_list, int user_count, char* account) {
-    if (user_list == NULL || account == NULL || user_count == 0 || strcmp(account, "admin_temp") == 0) {
-        printf("管理员无教师密码可修改！\n"); // 管理员切换后提示
-        return;
-    }
-
-    // 查找当前教师账号
-    int idx = -1;
-    for (int i = 0; i < user_count; i++) {
-        if (strcmp(user_list[i].account, account) == 0 && user_list[i].type == 2) {
-            idx = i;
-            break;
-        }
-    }
-    if (idx == -1) {
+    if (p == NULL) {
         printf("教师账号不存在！\n");
         return;
     }
 
-    // 验证原密码
-    char old_pwd[MAX_PWD_LEN] = { 0 };
+    char old_pwd[MAX_PWD_LEN] = { 0 }, new_pwd[MAX_PWD_LEN] = { 0 }, confirm_pwd[MAX_PWD_LEN] = { 0 };
     printf("请输入原密码：");
     scanf("%19s", old_pwd);
     clear_buffer();
-    if (strcmp(user_list[idx].pwd, old_pwd) != 0) {
+    if (strcmp(p->data.pwd, old_pwd) != 0) {
         printf("原密码错误！\n");
         return;
     }
 
-    // 输入并确认新密码
-    char new_pwd[MAX_PWD_LEN] = { 0 }, confirm_pwd[MAX_PWD_LEN] = { 0 };
     printf("请输入新密码：");
     scanf("%19s", new_pwd);
     clear_buffer();
     printf("请确认新密码：");
     scanf("%19s", confirm_pwd);
     clear_buffer();
-
     if (strcmp(new_pwd, confirm_pwd) != 0) {
         printf("两次密码不一致！\n");
         return;
     }
 
-    // 保存新密码
-    strcpy(user_list[idx].pwd, new_pwd);
-    save_user(user_list, user_count);
+    strcpy(p->data.pwd, new_pwd);
+    save_user(user_head, user_count);
     printf("密码修改成功！\n");
+}
+
+// 添加学生
+void add_student(StudentNode** stu_head, int* stu_count) {
+    Student temp;
+    printf("请输入学生学号：");
+    scanf("%11s", temp.id);
+    clear_buffer();
+
+    // 检查学号重复
+    StudentNode* p = *stu_head;
+    while (p != NULL) {
+        if (strcmp(p->data.id, temp.id) == 0) {
+            printf("该学号已存在！\n");
+            return;
+        }
+        p = p->next;
+    }
+
+    // 用fgets读取带空格的名字
+    printf("请输入学生姓名：");
+    fgets(temp.name, MAX_NAME_LEN, stdin);
+    size_t len = strlen(temp.name);
+    if (len > 0 && temp.name[len - 1] == '\n') {
+        temp.name[len - 1] = '\0';
+    }
+
+    printf("请输入学生班级：");
+    fgets(temp.class, MAX_CLASS_LEN, stdin);
+    len = strlen(temp.class);
+    if (len > 0 && temp.class[len - 1] == '\n') {
+        temp.class[len - 1] = '\0';
+    }
+
+    // 输入并校验成绩
+    printf("请输入数学成绩：");
+    while (scanf("%f", &temp.math) != 1 || !check_score(temp.math)) {
+        clear_buffer();
+        printf("成绩错误！请输入0-100的数值：");
+    }
+    clear_buffer();
+
+    printf("请输入语文成绩：");
+    while (scanf("%f", &temp.chinese) != 1 || !check_score(temp.chinese)) {
+        clear_buffer();
+        printf("成绩错误！请输入0-100的数值：");
+    }
+    clear_buffer();
+
+    printf("请输入英语成绩：");
+    while (scanf("%f", &temp.english) != 1 || !check_score(temp.english)) {
+        clear_buffer();
+        printf("成绩错误！请输入0-100的数值：");
+    }
+    clear_buffer();
+
+    calc_student_score(&temp);
+
+	// 插入学生信息到链表头部
+    StudentNode* new_node = (StudentNode*)malloc(sizeof(StudentNode));
+    new_node->data = temp;
+    new_node->next = *stu_head;
+    *stu_head = new_node;
+    (*stu_count)++;
+
+    save_student(*stu_head, *stu_count);
+    printf("学生添加成功！\n");
+}
+
+//删除学生
+void del_student(StudentNode** stu_head, int* stu_count, char* id) {
+    if (*stu_head == NULL || *stu_count == 0) {
+        printf("暂无学生数据！\n");
+        return;
+    }
+
+    StudentNode* p = *stu_head, * pre = NULL;
+    while (p != NULL && strcmp(p->data.id, id) != 0) {
+        pre = p;
+        p = p->next;
+    }
+    if (p == NULL) {
+        printf("该学生不存在！\n");
+        return;
+    }
+
+    // 删除节点
+    if (pre == NULL) {
+        *stu_head = p->next;
+    }
+    else {
+        pre->next = p->next;
+    }
+    free(p);
+    (*stu_count)--;
+
+    save_student(*stu_head, *stu_count);
+    printf("学生删除成功！\n");
+}
+
+// 修改学生成绩
+void edit_student(StudentNode* stu_head, int stu_count, char* id) {
+    if (stu_head == NULL || stu_count == 0) {
+        printf("暂无学生数据！\n");
+        return;
+    }
+
+    StudentNode* p = stu_head;
+    while (p != NULL && strcmp(p->data.id, id) != 0) {
+        p = p->next;
+    }
+    if (p == NULL) {
+        printf("该学生不存在！\n");
+        return;
+    }
+
+    printf("当前成绩：数学%.2f 语文%.2f 英语%.2f\n",
+        p->data.math, p->data.chinese, p->data.english);
+    printf("请输入新的数学成绩：");
+    while (scanf("%f", &p->data.math) != 1 || !check_score(p->data.math)) {
+        clear_buffer();
+        printf("成绩错误！请输入0-100的数值：");
+    }
+    clear_buffer();
+
+    printf("请输入新的语文成绩：");
+    while (scanf("%f", &p->data.chinese) != 1 || !check_score(p->data.chinese)) {
+        clear_buffer();
+        printf("成绩错误！请输入0-100的数值：");
+    }
+    clear_buffer();
+
+    printf("请输入新的英语成绩：");
+    while (scanf("%f", &p->data.english) != 1 || !check_score(p->data.english)) {
+        clear_buffer();
+        printf("成绩错误！请输入0-100的数值：");
+    }
+    clear_buffer();
+
+    calc_student_score(&p->data);
+    save_student(stu_head, stu_count);
+    printf("学生成绩修改成功！\n");
+}
+
+// 查询学生成绩
+void query_student(StudentNode* stu_head, int stu_count) {
+    if (stu_head == NULL || stu_count == 0) {
+        printf("暂无学生数据！\n");
+        return;
+    }
+
+    int query_choice, field, sort_type;
+    printf("\n===== 学生成绩查询 =====\n");
+    printf("1. 按学号查询\n");
+    printf("2. 按姓名查询\n");
+    printf("3. 按班级查询\n");
+    printf("4. 按单科/总分排序查询\n");
+    printf("请选择查询方式：");
+    scanf("%d", &query_choice);
+    clear_buffer();
+
+    switch (query_choice) {
+    case 1: {
+        char key[MAX_ID_LEN] = { 0 };
+        printf("请输入学生学号：");
+        scanf("%11s", key);
+        clear_buffer();
+        StudentNode* p = stu_head;
+        while (p != NULL) {
+            if (strcmp(p->data.id, key) == 0) {
+                printf("\n查询结果：\n");
+                printf("学号：%s\n姓名：%s\n班级：%s\n",
+                    p->data.id, p->data.name, p->data.class);
+                printf("数学：%.2f 语文：%.2f 英语：%.2f\n",
+                    p->data.math, p->data.chinese, p->data.english);
+                printf("平均分：%.2f 总分：%.2f\n", p->data.avg, p->data.total);
+                return;
+            }
+            p = p->next;
+        }
+        printf("未找到该学号的学生！\n");
+        break;
+    }
+    case 2: {
+        char key[MAX_NAME_LEN] = { 0 };
+        printf("请输入学生姓名：");
+        fgets(key, MAX_NAME_LEN, stdin);
+        size_t len = strlen(key);
+        if (len > 0 && key[len - 1] == '\n') key[len - 1] = '\0';
+        StudentNode* p = stu_head;
+        int found = 0;
+        while (p != NULL) {
+            if (strcmp(p->data.name, key) == 0) {
+                if (!found) {
+                    printf("\n查询结果：\n");
+                    found = 1;
+                }
+                printf("学号：%s\n姓名：%s\n班级：%s\n",
+                    p->data.id, p->data.name, p->data.class);
+                printf("数学：%.2f 语文：%.2f 英语：%.2f\n",
+                    p->data.math, p->data.chinese, p->data.english);
+                printf("平均分：%.2f 总分：%.2f\n", p->data.avg, p->data.total);
+                printf("------------------------\n");
+            }
+            p = p->next;
+        }
+        if (!found) printf("未找到该姓名的学生！\n");
+        break;
+    }
+    case 3: {
+        char key[MAX_CLASS_LEN] = { 0 };
+        printf("请输入班级名称：");
+        fgets(key, MAX_CLASS_LEN, stdin);
+        size_t len = strlen(key);
+        if (len > 0 && key[len - 1] == '\n') key[len - 1] = '\0';
+        StudentNode* p = stu_head;
+        int found = 0;
+        while (p != NULL) {
+            if (strcmp(p->data.class, key) == 0) {
+                if (!found) {
+                    printf("\n%s 班级成绩：\n", key);
+                    printf("%-15s %-22s %-10s %-10s %-8s %-12s %-8s\n",
+                        "学号", "姓名", "数学", "语文", "英语", "平均分", "总分");
+					printf("--------------------------------------------------------------------------------\n");
+                    found = 1;
+                }
+                printf("%-12s %-20s %-8.2f %-8.2f %-8.2f %-8.2f %-8.2f\n",
+                    p->data.id, p->data.name,
+                    p->data.math, p->data.chinese, p->data.english,
+                    p->data.avg, p->data.total);
+            }
+            p = p->next;
+        }
+        if (!found) printf("未找到该班级的学生！\n");
+        break;
+    }
+    case 4: {
+        printf("选择排序字段(1-数学 2-语文 3-英语 4-总分)：");
+        while (scanf("%d", &field) != 1 || field < 1 || field > 4) {
+            clear_buffer();
+            printf("输入错误！请输入1-4：");
+        }
+        clear_buffer();
+
+        printf("选择排序方式(0-升序 1-降序)：");
+        while (scanf("%d", &sort_type) != 1 || sort_type < 0 || sort_type > 1) {
+            clear_buffer();
+            printf("输入错误！请输入0或1：");
+        }
+        clear_buffer();
+
+        // 链表转数组
+        Student temp_stu[stu_count];
+        StudentNode* p = stu_head;
+        int i = 0;
+        while (p != NULL && i < stu_count) {
+            temp_stu[i] = p->data;
+            p = p->next;
+            i++;
+        }
+
+        // 排序
+        sort_students(temp_stu, stu_count, field, sort_type);
+
+        // 打印结果
+        char* field_name;
+        switch (field) {
+        case 1: field_name = "数学"; break;
+        case 2: field_name = "语文"; break;
+        case 3: field_name = "英语"; break;
+        case 4: field_name = "总分"; break;
+        }
+        printf("\n按%s%s排序结果：\n", field_name, sort_type == 0 ? "升序" : "降序");
+        printf("%-15s %-22s %-10s %-10s %-8s %-12s %-8s\n",
+            "学号", "姓名", "数学", "语文", "英语", "平均分", "总分");
+		printf("--------------------------------------------------------------------------------\n");
+        for (i = 0; i < stu_count; i++) {
+            printf("%-12s %-20s %-8.2f %-8.2f %-8.2f %-8.2f %-8.2f\n",
+                temp_stu[i].id, temp_stu[i].name,
+                temp_stu[i].math, temp_stu[i].chinese, temp_stu[i].english,
+                temp_stu[i].avg, temp_stu[i].total);
+        }
+        break;
+    }
+    default: printf("输入错误！\n");
+    }
+}
+
+// 分页查看班级成绩 
+void view_class_score_page(StudentNode* stu_head, int stu_count) {
+    if (stu_head == NULL || stu_count == 0) {
+        printf("暂无学生数据！\n");
+        return;
+    }
+
+    char class_name[MAX_CLASS_LEN] = { 0 };
+    printf("请输入要查看的班级名称：");
+    fgets(class_name, MAX_CLASS_LEN, stdin);
+    size_t len = strlen(class_name);
+    if (len > 0 && class_name[len - 1] == '\n') class_name[len - 1] = '\0';
+
+    // 第一步：筛选该班级的学生到临时数组
+    Student temp_stu[stu_count];
+    int class_count = 0;
+    StudentNode* p = stu_head;
+    while (p != NULL) {
+        if (strcmp(p->data.class, class_name) == 0) {
+            temp_stu[class_count++] = p->data;
+        }
+        p = p->next;
+    }
+
+    if (class_count == 0) {
+        printf("该班级暂无学生数据！\n");
+        return;
+    }
+
+    // 第二步：询问是否排序
+    int sort_choice, field, sort_type;
+    printf("\n是否需要排序？(1-是 0-否，直接显示)：");
+    while (scanf("%d", &sort_choice) != 1 || sort_choice < 0 || sort_choice > 1) {
+        clear_buffer();
+        printf("输入错误！请输入0或1：");
+    }
+    clear_buffer();
+
+    if (sort_choice == 1) {
+        printf("选择排序字段(1-数学 2-语文 3-英语 4-总分)：");
+        while (scanf("%d", &field) != 1 || field < 1 || field > 4) {
+            clear_buffer();
+            printf("输入错误！请输入1-4：");
+        }
+        clear_buffer();
+
+        printf("选择排序方式(0-升序 1-降序)：");
+        while (scanf("%d", &sort_type) != 1 || sort_type < 0 || sort_type > 1) {
+            clear_buffer();
+            printf("输入错误！请输入0或1：");
+        }
+        clear_buffer();
+
+        // 调用排序函数
+        sort_students(temp_stu, class_count, field, sort_type);
+
+        char* field_name;
+        switch (field) {
+        case 1: field_name = "数学"; break;
+        case 2: field_name = "语文"; break;
+        case 3: field_name = "英语"; break;
+        case 4: field_name = "总分"; break;
+        }
+        printf("\n已按%s%s排序！\n", field_name, sort_type == 0 ? "升序" : "降序");
+    }
+
+    // 第三步：分页显示
+    int page_size = 5;
+    int total_page = (class_count + page_size - 1) / page_size;
+    int current_page = 1;
+
+    while (1) {
+        printf("\n===== %s 班级成绩 - 第%d页/共%d页 =====\n", class_name, current_page, total_page);
+        printf("%-15s %-22s %-10s %-10s %-8s %-12s %-8s\n",
+            "学号", "姓名", "数学", "语文", "英语", "平均分", "总分");
+        printf("-----------------------------------------------------------------------\n");
+
+        // 打印当前页数据
+        int start = (current_page - 1) * page_size;
+        int end = start + page_size;
+        if (end > class_count) end = class_count;
+        for (int i = start; i < end; i++) {
+            printf("%-12s %-20s %-8.2f %-8.2f %-8.2f %-8.2f %-8.2f\n",
+                temp_stu[i].id, temp_stu[i].name,
+                temp_stu[i].math, temp_stu[i].chinese, temp_stu[i].english,
+                temp_stu[i].avg, temp_stu[i].total);
+        }
+
+        // 分页操作
+        printf("\n操作：1-上一页 2-下一页 0-退出\n");
+        int opt;
+        printf("请选择：");
+        scanf("%d", &opt);
+        clear_buffer();
+        switch (opt) {
+        case 1:
+            if (current_page > 1) current_page--;
+            else printf("已是第一页！\n");
+            break;
+        case 2:
+            if (current_page < total_page) current_page++;
+            else printf("已是最后一页！\n");
+            break;
+        case 0: return;
+        default: printf("输入错误！\n");
+        }
+    }
+}
+
+// 教师端成绩分析 
+void teacher_score_analysis(StudentNode* stu_head, int stu_count) {
+    if (stu_head == NULL || stu_count == 0) {
+        printf("暂无学生数据！\n");
+        return;
+    }
+
+    float math_sum = 0, chinese_sum = 0, english_sum = 0;
+    float math_max = 0, chinese_max = 0, english_max = 0;
+    float math_min = 100, chinese_min = 100, english_min = 100;
+
+    StudentNode* p = stu_head;
+    while (p != NULL) {
+        math_sum += p->data.math;
+        chinese_sum += p->data.chinese;
+        english_sum += p->data.english;
+
+        if (p->data.math > math_max) math_max = p->data.math;
+        if (p->data.chinese > chinese_max) chinese_max = p->data.chinese;
+        if (p->data.english > english_max) english_max = p->data.english;
+
+        if (p->data.math < math_min) math_min = p->data.math;
+        if (p->data.chinese < chinese_min) chinese_min = p->data.chinese;
+        if (p->data.english < english_min) english_min = p->data.english;
+        p = p->next;
+    }
+
+    printf("\n===== 成绩分析报告 =====\n");
+    printf("参与统计学生数：%d\n", stu_count);
+    printf("科目\t平均分\t最高分\t最低分\n");
+    printf("数学\t%.2f\t%.2f\t%.2f\n", math_sum / stu_count, math_max, math_min);
+    printf("语文\t%.2f\t%.2f\t%.2f\n", chinese_sum / stu_count, chinese_max, chinese_min);
+    printf("英语\t%.2f\t%.2f\t%.2f\n", english_sum / stu_count, english_max, english_min);
+}
+
+// 导出学生成绩
+void export_student(StudentNode* stu_head, int stu_count) {
+    if (stu_head == NULL || stu_count == 0) {
+        printf("暂无学生数据！\n");
+        return;
+    }
+
+    system("md data 2>nul");
+    FILE* fp = fopen("./data/students_export.csv", "w");
+    if (!fp) {
+        printf("导出失败！\n");
+        return;
+    }
+
+    fprintf(fp, "学号,姓名,班级,数学,语文,英语,平均分,总分\n");
+    StudentNode* p = stu_head;
+    while (p != NULL) {
+        fprintf(fp, "%s,%s,%s,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+            p->data.id, p->data.name, p->data.class,
+            p->data.math, p->data.chinese, p->data.english,
+            p->data.avg, p->data.total);
+        p = p->next;
+    }
+
+    fclose(fp);
+    printf("学生成绩已导出到 ./data/students_export.csv\n");
 }
