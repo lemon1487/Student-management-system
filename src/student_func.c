@@ -1,23 +1,20 @@
+#include "../include/student_func.h"
+#include "../include/file_func.h"
 #include "../include/common.h"
 
-// 学生主菜单入口（核心功能导航）
-void student_menu(Student* stu_list, int stu_count, User* user_list, int user_count,
-    char* account, Appeal* appeal_list, int* appeal_count,
-    Todo* todo_list, int* todo_count) {
-    if (stu_list == NULL || user_list == NULL || account == NULL ||
-        appeal_list == NULL || appeal_count == NULL || todo_list == NULL || todo_count == NULL) {
-        printf("参数错误！\n");
-        return;
-    }
+
+// 学生主菜单
+void student_menu(StudentNode* stu_head, int stu_count, UserNode* user_head, int user_count, char* account,
+    Appeal* appeal_list, int* appeal_count, Todo* todo_list, int* todo_count) {
     int choice;
     while (1) {
         printf("\n===== 学生功能菜单 =====\n");
-        printf("1. 成绩查询（个人）\n");
-        printf("2. 查询本班成绩\n");
-        printf("3. 成绩分析（排名）\n");
-        printf("4. 提交成绩申诉\n");
-        printf("5. 修改密码（需原密码）\n");
-        printf("0. 返回上一级\n");
+        printf("1. 查看个人成绩\n");
+        printf("2. 个人成绩分析\n");
+        printf("3. 查看本班成绩\n"); 
+        printf("4. 提交成绩/密码申诉\n");
+        printf("5. 修改个人密码\n");
+        printf("0. 退出登录\n");
         printf("请选择操作：");
 
         while (scanf("%d", &choice) != 1 || choice < 0 || choice > 5) {
@@ -27,207 +24,246 @@ void student_menu(Student* stu_list, int stu_count, User* user_list, int user_co
         clear_buffer();
 
         switch (choice) {
-        case 1: view_my_score(stu_list, stu_count, account); break;
-        case 2: view_class_score(stu_list, stu_count, account); break;
-        case 3: score_analysis(stu_list, stu_count, account); break;
-        case 4: {
-            if (*appeal_count >= 50) {
-                printf("申诉数量已达上限！\n");
-                break;
-            }
-            Appeal new_appeal = { 0 };
-            strncpy(new_appeal.stu_id, account, MAX_ID_LEN - 1); // 申诉学生学号
-            printf("请输入成绩申诉内容：");
-            fgets(new_appeal.content, MAX_APPEAL_LEN, stdin);
-            new_appeal.content[strcspn(new_appeal.content, "\n")] = '\0'; // 移除换行符
-            new_appeal.type = 1; // 1-成绩申诉
-            new_appeal.is_processed = 0; // 未处理
-            strcpy(new_appeal.feedback, ""); // 暂无反馈
-            appeal_list[*appeal_count] = new_appeal;
-            (*appeal_count)++;
-            save_appeal(appeal_list, *appeal_count); // 保存申诉数据
-
-            // 同步生成管理员待办事项
-            if (*todo_count < 50) {
-                char todo_content[MAX_TODO_LEN] = { 0 };
-                snprintf(todo_content, MAX_TODO_LEN - 1, "[成绩申诉] 学号:%s 需处理", account);
-                strncpy(todo_list[*todo_count].content, todo_content, MAX_TODO_LEN - 1);
-                todo_list[*todo_count].is_done = 0; // 未完成
-                (*todo_count)++;
-                save_todo(todo_list, *todo_count); // 保存待办
-            }
-            printf("成绩申诉提交成功！等待管理员处理\n");
-            break;
-        }
-        case 5: student_change_pwd(user_list, user_count, account); break;
-        case 0: printf("返回上一级菜单...\n"); return;
+        case 1: student_view_score(stu_head, stu_count, account); break;
+        case 2: student_score_analysis(stu_head, stu_count, account); break;
+        case 3: student_view_class_score(stu_head, stu_count, account); break;
+        case 4: student_submit_appeal(appeal_list, appeal_count, todo_list, todo_count, account); break;
+        case 5: student_change_pwd(user_head, user_count, account); break;
+        case 0: printf("退出学生登录...\n"); return;
         default: printf("输入错误！\n");
         }
     }
 }
 
-// 查看个人成绩（按学号匹配）
-void view_my_score(Student* stu_list, int stu_count, char* account) {
-    if (stu_list == NULL || account == NULL || stu_count == 0) {
-        printf("暂无成绩信息/参数错误！\n");
+// 学生端成绩分析
+void student_score_analysis(StudentNode* stu_head, int stu_count, char* account) {
+    if (stu_head == NULL || stu_count == 0) {
+        printf("暂无学生数据！\n");
         return;
     }
-    for (int i = 0; i < stu_count; i++) {
-        if (strcmp(stu_list[i].id, account) == 0) {
-            printf("\n===== 个人成绩 =====\n");
-            printf("学号：%s\n", stu_list[i].id);
-            printf("姓名：%s\n", stu_list[i].name);
-            printf("班级：%s\n", stu_list[i].class);
-            printf("数学：%8.1f\n", stu_list[i].math);
-            printf("语文：%8.1f\n", stu_list[i].chinese);
-            printf("英语：%8.1f\n", stu_list[i].english);
-            printf("平均分：%6.1f\n", stu_list[i].avg);
-            printf("总分：%8.1f\n", stu_list[i].total);
-            return;
-        }
+
+    StudentNode* p = stu_head;
+    while (p != NULL && strcmp(p->data.id, account) != 0) {
+        p = p->next;
     }
-    printf("未找到你的成绩信息！\n");
+    if (p == NULL) {
+        printf("未找到你的成绩数据！\n");
+        return;
+    }
+
+    int math_rank = get_student_rank(stu_head, stu_count, account, 1);
+    int chinese_rank = get_student_rank(stu_head, stu_count, account, 2);
+    int english_rank = get_student_rank(stu_head, stu_count, account, 3);
+    int total_rank = get_student_rank(stu_head, stu_count, account, 4);
+
+    printf("\n===== 个人成绩分析 =====\n");
+    printf("学号：%s\n姓名：%s\n班级：%s\n",
+        p->data.id, p->data.name, p->data.class);
+    printf("\n成绩详情：\n");
+    printf("科目\t成绩\t班级排名（共%d人）\n", stu_count);
+    printf("数学\t%.2f\t第%d名\n", p->data.math, math_rank);
+    printf("语文\t%.2f\t第%d名\n", p->data.chinese, chinese_rank);
+    printf("英语\t%.2f\t第%d名\n", p->data.english, english_rank);
+    printf("总分\t%.2f\t第%d名\n", p->data.total, total_rank);
 }
 
-// 查看本班所有学生成绩（按当前学生班级筛选）
-void view_class_score(Student* stu_list, int stu_count, char* account) {
-    if (stu_list == NULL || account == NULL || stu_count == 0) {
-        printf("暂无成绩信息/参数错误！\n");
+//学生查看个人成绩 
+void student_view_score(StudentNode* stu_head, int stu_count, char* account) {
+    if (stu_head == NULL || stu_count == 0) {
+        printf("暂无学生成绩数据！\n");
         return;
     }
-    char class_name[MAX_CLASS_LEN] = { 0 };
-    // 获取当前学生的班级名称
-    for (int i = 0; i < stu_count; i++) {
-        if (strcmp(stu_list[i].id, account) == 0) {
-            strncpy(class_name, stu_list[i].class, MAX_CLASS_LEN - 1);
+
+    StudentNode* p = stu_head;
+    while (p != NULL && strcmp(p->data.id, account) != 0) {
+        p = p->next;
+    }
+    if (p == NULL) {
+        printf("未找到你的成绩数据！\n");
+        return;
+    }
+
+    printf("\n===== 个人成绩 =====\n");
+    printf("学号：%s\n姓名：%s\n班级：%s\n",
+        p->data.id, p->data.name, p->data.class);
+    printf("数学：%.2f 语文：%.2f 英语：%.2f\n",
+        p->data.math, p->data.chinese, p->data.english);
+    printf("平均分：%.2f 总分：%.2f\n", p->data.avg, p->data.total);
+}
+// 学生查看本班成绩
+void student_view_class_score(StudentNode* stu_head, int stu_count, char* account) {
+    if (stu_head == NULL || stu_count == 0) {
+        printf("暂无学生数据！\n");
+        return;
+    }
+
+    // 第一步：先找到自己的班级
+    char my_class[MAX_CLASS_LEN] = { 0 };
+    StudentNode* p = stu_head;
+    while (p != NULL) {
+        if (strcmp(p->data.id, account) == 0) {
+            strncpy(my_class, p->data.class, MAX_CLASS_LEN);
+            my_class[MAX_CLASS_LEN - 1] = '\0';
             break;
         }
+        p = p->next;
     }
-    if (strlen(class_name) == 0) {
+
+    if (strlen(my_class) == 0) {
         printf("未找到你的班级信息！\n");
         return;
     }
 
-    printf("\n===== %s 班级成绩 =====\n", class_name);
-    printf("%-12s %-20s %-20s %8s %8s %8s %8s %8s\n",
-        "学号", "姓名", "班级", "数学", "语文", "英语", "平均分", "总分");
-    printf("------------------------------------------------------------------------------------------------\n");
-
-    int has_data = 0;
-    // 遍历展示本班所有学生成绩
-    for (int i = 0; i < stu_count; i++) {
-        if (strcmp(stu_list[i].class, class_name) == 0) {
-            has_data = 1;
-            printf("%-12s %-20s %-20s %8.1f %8.1f %8.1f %8.1f %8.1f\n",
-                stu_list[i].id, stu_list[i].name, stu_list[i].class,
-                stu_list[i].math, stu_list[i].chinese, stu_list[i].english,
-                stu_list[i].avg, stu_list[i].total);
-        }
-    }
-    if (!has_data) {
-        printf("该班级暂无成绩数据！\n");
-    }
-}
-
-// 成绩分析（展示本班总分排名+前10名）
-void score_analysis(Student* stu_list, int stu_count, char* account) {
-    if (stu_list == NULL || account == NULL || stu_count == 0) {
-        printf("暂无成绩信息/参数错误！\n");
-        return;
-    }
-    char class_name[MAX_CLASS_LEN] = { 0 };
-    // 获取当前学生的班级名称
-    for (int i = 0; i < stu_count; i++) {
-        if (strcmp(stu_list[i].id, account) == 0) {
-            strncpy(class_name, stu_list[i].class, MAX_CLASS_LEN - 1);
-            break;
-        }
-    }
-    if (strlen(class_name) == 0) {
-        printf("未找到你的班级信息！\n");
-        return;
-    }
-
-    // 复制本班学生数据（避免修改原数组）
-    Student class_stu[1000] = { 0 };
+    // 第二步：筛选本班学生到临时数组
+    Student temp_stu[stu_count];
     int class_count = 0;
-    for (int i = 0; i < stu_count; i++) {
-        if (strcmp(stu_list[i].class, class_name) == 0) {
-            class_stu[class_count] = stu_list[i];
-            class_count++;
+    p = stu_head;
+    while (p != NULL) {
+        if (strcmp(p->data.class, my_class) == 0) {
+            temp_stu[class_count++] = p->data;
         }
+        p = p->next;
     }
 
-    // 按总分降序排序
-    sort_students(class_stu, class_count, 4, SORT_DESC);
+    if (class_count == 0) {
+        printf("本班暂无学生数据！\n");
+        return;
+    }
 
-    // 查找当前学生在本班的排名
-    int rank = -1;
+    // 第三步：询问是否排序
+    int sort_choice, field, sort_type;
+    printf("\n是否需要排序？(1-是 0-否，直接显示)：");
+    while (scanf("%d", &sort_choice) != 1 || sort_choice < 0 || sort_choice > 1) {
+        clear_buffer();
+        printf("输入错误！请输入0或1：");
+    }
+    clear_buffer();
+
+    if (sort_choice == 1) {
+        printf("选择排序字段(1-数学 2-语文 3-英语 4-总分)：");
+        while (scanf("%d", &field) != 1 || field < 1 || field > 4) {
+            clear_buffer();
+            printf("输入错误！请输入1-4：");
+        }
+        clear_buffer();
+
+        printf("选择排序方式(0-升序 1-降序)：");
+        while (scanf("%d", &sort_type) != 1 || sort_type < 0 || sort_type > 1) {
+            clear_buffer();
+            printf("输入错误！请输入0或1：");
+        }
+        clear_buffer();
+
+        // 调用排序函数
+        sort_students(temp_stu, class_count, field, sort_type);
+
+        char* field_name;
+        switch (field) {
+        case 1: field_name = "数学"; break;
+        case 2: field_name = "语文"; break;
+        case 3: field_name = "英语"; break;
+        case 4: field_name = "总分"; break;
+        }
+        printf("\n已按%s%s排序！\n", field_name, sort_type == 0 ? "升序" : "降序");
+    }
+
+    // 第四步：显示本班成绩
+    printf("\n===== %s 班级成绩 =====\n", my_class);
+    printf("%-15s %-22s %-10s %-10s %-8s %-12s %-8s\n",
+        "学号", "姓名", "数学", "语文", "英语", "平均分", "总分");
+    printf("--------------------------------------------------------------------------\n");
+
     for (int i = 0; i < class_count; i++) {
-        if (strcmp(class_stu[i].id, account) == 0) {
-            rank = i + 1;
-            break;
-        }
-    }
-
-    printf("\n===== %s 班级成绩排名（总分降序）=====\n", class_name);
-    printf("你的排名：第 %d 名 / 共 %d 人\n", rank, class_count);
-    printf("前10名成绩：\n");
-    printf("%-12s %-20s %8s\n", "学号", "姓名", "总分");
-    printf("----------------------------\n");
-    int show_count = (class_count > 10) ? 10 : class_count; // 最多展示前10名
-    for (int i = 0; i < show_count; i++) {
-        printf("%-12s %-20s %8.1f\n",
-            class_stu[i].id, class_stu[i].name, class_stu[i].total);
+        printf("%-12s %-20s %-8.2f %-8.2f %-8.2f %-8.2f %-8.2f\n",
+            temp_stu[i].id, temp_stu[i].name,
+            temp_stu[i].math, temp_stu[i].chinese, temp_stu[i].english,
+            temp_stu[i].avg, temp_stu[i].total);
     }
 }
 
-// 学生修改密码（验证原密码，两次确认新密码，修改后保存）
-void student_change_pwd(User* user_list, int user_count, char* account) {
-    if (user_list == NULL || account == NULL || user_count == 0) {
-        printf("参数错误！\n");
+//学生提交申诉
+void student_submit_appeal(Appeal* appeal_list, int* appeal_count, Todo* todo_list, int* todo_count, char* account) {
+    if (*appeal_count >= MAX_APPEAL) {
+        printf("申诉数量已达上限！\n");
+        return;
+    }
+    if (*todo_count >= MAX_TODO) {
+        printf("待办数量已达上限！\n");
         return;
     }
 
-    // 查找当前学生账号
-    int idx = -1;
-    for (int i = 0; i < user_count; i++) {
-        if (strcmp(user_list[i].account, account) == 0 && user_list[i].type == STUDENT) {
-            idx = i;
-            break;
-        }
+    Appeal new_appeal;
+    strcpy(new_appeal.stu_id, account);
+    new_appeal.is_processed = 0;
+    memset(new_appeal.feedback, 0, MAX_CONTENT_LEN);
+
+    printf("\n===== 提交申诉 =====\n");
+    printf("选择申诉类型：1-成绩申诉 2-密码找回\n");
+    while (scanf("%d", &new_appeal.type) != 1 || new_appeal.type < 1 || new_appeal.type > 2) {
+        clear_buffer();
+        printf("输入错误！请输入1或2：");
     }
-    if (idx == -1) {
-        printf("账号不存在！\n");
+    clear_buffer();
+
+    printf("请输入申诉内容：");
+    scanf("%99s", new_appeal.content);
+    clear_buffer();
+
+    // 1. 添加申诉
+    appeal_list[*appeal_count] = new_appeal;
+    (*appeal_count)++;
+    save_appeal(appeal_list, *appeal_count);
+
+    // 2. 同步添加管理员待办
+    Todo new_todo;
+    char* type_str = new_appeal.type == 1 ? "成绩申诉" : "密码找回";
+    sprintf(new_todo.content, "处理%s：%s", type_str, account);
+    new_todo.is_done = 0;
+    todo_list[*todo_count] = new_todo;
+    (*todo_count)++;
+    save_todo(todo_list, *todo_count);
+
+    printf("申诉提交成功！请等待管理员处理。\n");
+}
+
+//  学生修改密码
+void student_change_pwd(UserNode* user_head, int user_count, char* account) {
+    if (user_head == NULL || user_count == 0) {
+        printf("暂无用户数据！\n");
         return;
     }
 
-    // 验证原密码
-    char old_pwd[MAX_PWD_LEN] = { 0 };
+    UserNode* p = user_head;
+    while (p != NULL && strcmp(p->data.account, account) != 0) {
+        p = p->next;
+    }
+    if (p == NULL) {
+        printf("学生账号不存在！\n");
+        return;
+    }
+
+    char old_pwd[MAX_PWD_LEN] = { 0 }, new_pwd[MAX_PWD_LEN] = { 0 }, confirm_pwd[MAX_PWD_LEN] = { 0 };
     printf("请输入原密码：");
     scanf("%19s", old_pwd);
     clear_buffer();
-    if (strcmp(user_list[idx].pwd, old_pwd) != 0) {
+    if (strcmp(p->data.pwd, old_pwd) != 0) {
         printf("原密码错误！\n");
         return;
     }
 
-    // 输入并确认新密码
-    char new_pwd[MAX_PWD_LEN] = { 0 }, confirm_pwd[MAX_PWD_LEN] = { 0 };
     printf("请输入新密码：");
     scanf("%19s", new_pwd);
     clear_buffer();
     printf("请确认新密码：");
     scanf("%19s", confirm_pwd);
     clear_buffer();
-
     if (strcmp(new_pwd, confirm_pwd) != 0) {
         printf("两次密码不一致！\n");
         return;
     }
 
-    // 保存新密码并持久化
-    strcpy(user_list[idx].pwd, new_pwd);
-    save_user(user_list, user_count);
-    printf("密码修改成功！\n");
+    strcpy(p->data.pwd, new_pwd);
+    save_user(user_head, user_count);
+    printf("密码修改成功！请重新登录。\n");
 }
+
