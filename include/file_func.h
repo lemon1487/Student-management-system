@@ -3,14 +3,25 @@
 
 #include "common.h"
 
-// 文件操作函数声明
-int load_user(User* user_list, int max_count);       // 从文件加载用户数据
-void save_user(User* user_list, int count);          // 保存用户数据到文件
-int load_student(Student* stu_list, int max_count);  // 从文件加载学生数据
-void save_student(Student* stu_list, int count);     // 保存学生数据到文件
-int load_todo(Todo* todo_list, int max_count);       // 从文件加载待办数据
-void save_todo(Todo* todo_list, int count);          // 保存待办数据到文件
-int load_appeal(Appeal* appeal_list, int max_count); // 从文件加载申诉数据
-void save_appeal(Appeal* appeal_list, int count);    // 保存申诉数据到文件
+// 保存用户数据到 ./data/users.dat
+void save_user(UserNode* head, int count);
+// 加载用户数据
+int load_user(UserNode** head, int* count);
+// 保存学生数据到 ./data/students.dat
+void save_student(StudentNode* head, int count);
+// 加载学生数据
+int load_student(StudentNode** head, int* count);
+// 保存待办事项到 ./data/todo.dat
+void save_todo(Todo* todo_list, int count);
+// 加载待办事项
+int load_todo(Todo* todo_list, int max_count);
+// 保存申诉数据到 ./data/appeal.dat
+void save_appeal(Appeal* appeal_list, int count);
+// 加载申诉数据
+int load_appeal(Appeal* appeal_list, int max_count);
+// 导出用户数据到 ./data/users_export.csv
+void export_users(UserNode* head, int count);
+// 导入用户数据
+int import_users(UserNode** head, int* count);
 
-#endif
+#endif // FILE_FUNC_H
